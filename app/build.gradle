@@ -1,0 +1,16 @@
+plugins {
+    id 'com.android.application'
+}
+
+android {
+    namespace 'com.elta.entregas'
+    compileSdk 34
+
+    defaultConfig {
+        applicationId "com.elta.entregas"
+        minSdk 24
+        targetSdk 34
+        versionCode 31
+        versionName "3.1"
+    }
+}

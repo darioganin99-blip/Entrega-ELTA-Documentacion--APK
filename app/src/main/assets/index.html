@@ -1,0 +1,62 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="theme-color" content="#009B4E">
+<link rel="manifest" href="manifest.json">
+<link rel="stylesheet" href="style.css">
+<title>ELTA Registro de Entregas</title>
+</head>
+<body class="app-shell" data-version="3.1">
+<div class="topbar"><span>ELTA</span><span>Versión 3.1</span></div>
+<header>
+  <div class="logoText">ELTA</div>
+  
+  <div class="subtitle">Entrega de Unidades</div>
+  
+</header>
+
+<nav>
+  <button id="btn-entrega" onclick="show('entrega')">✅ Entrega</button>
+  <button id="btn-usuario" onclick="show('usuario')">👤 Usuario</button>
+  <button id="btn-ultimo" onclick="show('ultimo')">📋 Último</button>
+</nav>
+
+<main>
+<section id="entrega">
+  <div class="card">
+    <div class="progress"><div class="dot on"></div><div class="dot" id="p2"></div><div class="dot" id="p3"></div><div class="dot" id="p4"></div><div class="dot" id="p5"></div></div>
+    <span class="stepPill" id="stepPillText">Paso 1 de 5</span>
+    <h2 id="stepTitle">Confirmar Entrega</h2>
+    <div id="stepContent"></div>
+  </div>
+</section>
+
+<section id="usuario" class="hidden">
+  <div class="card">
+    <h2>Usuario</h2>
+    <label>Número de flota</label>
+    <input id="userFleet" placeholder="Ej: 103">
+    <label>Nombre de chofer</label>
+    <input id="userDriver" placeholder="Nombre y apellido">
+    <label>Número de WhatsApp destino</label>
+    <input id="userPhone" placeholder="Ej: 5491123456789">
+    <p class="small">Ingresar el teléfono con código de país, sin +, espacios ni guiones.</p>
+    <button class="btn" onclick="saveUser()">Guardar usuario</button>
+    <p id="userMsg" class="small"></p>
+  </div>
+</section>
+
+<section id="ultimo" class="hidden">
+  <div class="card">
+    <h2>Último Registro</h2>
+    <div id="lastBox" class="summary">Todavía no hay registros enviados.</div>
+    <button class="btn secondary" onclick="resendLast()">Reenviar por WhatsApp</button>
+  </div>
+</section>
+</main>
+
+<script src="app.js"></script>
+</body>
+</html>
