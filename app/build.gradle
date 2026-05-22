@@ -3,11 +3,11 @@ plugins {
 }
 
 android {
-    namespace 'com.elta.entregas'
+    namespace 'com.elta.entregas_doc'
     compileSdk 34
 
     defaultConfig {
-        applicationId "com.elta.entregas"
+        applicationId "com.elta.entregas_doc"
         minSdk 24
         targetSdk 34
         versionCode 32
