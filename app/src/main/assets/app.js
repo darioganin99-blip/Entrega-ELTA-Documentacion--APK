@@ -129,10 +129,12 @@ function renderStep(){
       <p class="stepHint">Escanear o adjuntar documento antes de enviar. Este paso es opcional.</p>
       <div class="docBox">
         <label>Documento / Foto</label>
-        <input class="fileInput" id="docFile" type="file" accept="image/*,application/pdf,.pdf" multiple onchange="handleDocumentos(event)" style="display:none">
+        <input class="fileInput" id="docFile" type="file" accept="image/*,application/pdf,.pdf" multiple onchange="handleDocumentos(event)" >
         <button class="btn secondary" type="button" onclick="abrirSelectorDocumentos()">Seleccionar PDF / Imagen</button>
         <button class="btn light" type="button" onclick="abrirSelectorDocumentos()">Escanear documento con cámara</button>
-        <div id="docName" class="docName">${state.documentos && state.documentos.length ? state.documentos.length + " documento(s) seleccionado(s)" : "Sin documento adjunto"}</div>\n        <div id="docList" class="docList">${state.documentos && state.documentos.length ? state.documentos.map((d,i)=>`<div class="docItem">${i+1}. ${d.name}</div>`).join("") : ""}</div>\n        <div class="docNote">Podés seleccionar uno o más PDF o escanear fotos del documento con la cámara.</div>
+        <div id="docName" class="docName">${state.documentos && state.documentos.length ? state.documentos.length + " documento(s) seleccionado(s)" : "Sin documento adjunto"}</div>
+        <div id="docList" class="docList">${state.documentos && state.documentos.length ? state.documentos.map((d,i)=>`<div class="docItem">${i+1}. ${d.name}</div>`).join("") : ""}</div>
+        <div class="docNote">Podés seleccionar uno o más PDF o escanear fotos del documento con la cámara.</div>
         <img id="docPreview" class="docPreview" ${doc && doc.preview ? `src="${doc.preview}" style="display:block"` : ""}>
       </div>
       <div class="stepActions">
@@ -282,7 +284,11 @@ function saveUnits(){
 function buildMessage(finalize){
   const u=user(), gps=state.gps, id=regId();
   const direccionDestino = state.destino ? destinoDireccionCompleta(state.destino) : "";
-  const unidades = state.vins.length ? "VIN informados:\n"+state.vins.map(v=>"- "+v).join("\n") : "Informado solo con lote.";\n  const documentosTxt = state.documentos && state.documentos.length ? "Documentos: " + state.documentos.map(d=>d.name).join(", ") + "\\n" : "";
+  const unidades = state.vins.length ? "VIN informados:
+"+state.vins.map(v=>"- "+v).join("
+") : "Informado solo con lote.";
+  const documentosTxt = state.documentos && state.documentos.length ? "Documentos: " + state.documentos.map(d=>d.name).join(", ") + "\
+" : "";
   const msg = `ELTA - Registro de Entrega de unidades
 N° registro: ${id}
 Chofer: ${u.driver}
@@ -290,7 +296,8 @@ Flota: ${u.fleet}
 Fecha entrega: ${gps ? fmtDate(gps.time) : fmtDate(new Date())}
 Lote: ${state.lote}
 Destino: ${state.destino ? state.destino.name : ""}
-${direccionDestino ? "Dirección destino: " + direccionDestino + "\n" : ""}GPS: ${gps ? gps.lat.toFixed(6)+", "+gps.lng.toFixed(6) : ""}
+${direccionDestino ? "Dirección destino: " + direccionDestino + "
+" : ""}GPS: ${gps ? gps.lat.toFixed(6)+", "+gps.lng.toFixed(6) : ""}
 ${unidades}
 ${documentosTxt}Observación general: ${state.obs || "Sin observaciones"}`;
   if(finalize) save(LS.last,{msg, date:new Date().toISOString()});
