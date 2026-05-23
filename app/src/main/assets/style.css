@@ -316,3 +316,18 @@ video{width:100%;border-radius:18px;background:#000;margin-top:12px}
   line-height:1.35;
   margin-top:8px;
 }
+
+
+/* V4.1 navegacion entre pasos */
+.stepActions{
+  display:grid !important;
+  grid-template-columns:1fr 1fr;
+  gap:12px;
+  margin-top:18px;
+}
+.btn.back{
+  background:#E5E7EB !important;
+  color:#111827 !important;
+  box-shadow:none !important;
+  border:1px solid #CBD5E1 !important;
+}
