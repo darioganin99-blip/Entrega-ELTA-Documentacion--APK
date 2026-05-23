@@ -331,3 +331,39 @@ video{width:100%;border-radius:18px;background:#000;margin-top:12px}
   box-shadow:none !important;
   border:1px solid #CBD5E1 !important;
 }
+
+
+/* V4.2 navegación corregida */
+.stepPill{
+  display:inline-block !important;
+  background:#E8F7EF !important;
+  color:#007A3D !important;
+  border-radius:999px !important;
+  padding:6px 10px !important;
+  margin:0 0 10px 0 !important;
+  font-size:12px !important;
+  font-weight:950 !important;
+  line-height:1 !important;
+  white-space:nowrap !important;
+}
+.stepActions{
+  display:grid !important;
+  grid-template-columns:1fr 1fr;
+  gap:12px;
+  margin-top:18px;
+}
+.stepActions.single{
+  grid-template-columns:1fr;
+}
+.btn.back{
+  background:#E5E7EB !important;
+  color:#111827 !important;
+  box-shadow:none !important;
+  border:1px solid #CBD5E1 !important;
+}
+.navError{
+  color:#B91C1C;
+  font-weight:900;
+  font-size:13px;
+  margin-top:8px;
+}
