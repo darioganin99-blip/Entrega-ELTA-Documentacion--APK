@@ -7,7 +7,6 @@ import android.content.pm.PackageManager;
 import android.net.Uri;
 import android.os.Build;
 import android.os.Bundle;
-import android.provider.MediaStore;
 import android.webkit.PermissionRequest;
 import android.webkit.ValueCallback;
 import android.webkit.WebChromeClient;
@@ -36,6 +35,7 @@ public class MainActivity extends Activity {
         settings.setMediaPlaybackRequiresUserGesture(false);
 
         webView.setWebViewClient(new WebViewClient());
+
         webView.setWebChromeClient(new WebChromeClient() {
             @Override
             public void onPermissionRequest(final PermissionRequest request) {
@@ -51,19 +51,14 @@ public class MainActivity extends Activity {
                 }
                 uploadMessage = filePathCallback;
 
-                Intent fileIntent = new Intent(Intent.ACTION_GET_CONTENT);
-                fileIntent.addCategory(Intent.CATEGORY_OPENABLE);
-                fileIntent.setType("*/*");
-                fileIntent.putExtra(Intent.EXTRA_MIME_TYPES, new String[]{"image/*", "application/pdf"});
-                fileIntent.putExtra(Intent.EXTRA_ALLOW_MULTIPLE, true);
-
-                Intent cameraIntent = new Intent(MediaStore.ACTION_IMAGE_CAPTURE);
-
-                Intent chooser = Intent.createChooser(fileIntent, "Seleccionar o escanear documento");
-                chooser.putExtra(Intent.EXTRA_INITIAL_INTENTS, new Intent[]{cameraIntent});
+                Intent contentIntent = new Intent(Intent.ACTION_OPEN_DOCUMENT);
+                contentIntent.addCategory(Intent.CATEGORY_OPENABLE);
+                contentIntent.setType("*/*");
+                contentIntent.putExtra(Intent.EXTRA_MIME_TYPES, new String[]{"image/*", "application/pdf"});
+                contentIntent.putExtra(Intent.EXTRA_ALLOW_MULTIPLE, true);
 
                 try {
-                    startActivityForResult(chooser, FILE_CHOOSER_REQUEST_CODE);
+                    startActivityForResult(Intent.createChooser(contentIntent, "Seleccionar o escanear documento"), FILE_CHOOSER_REQUEST_CODE);
                     return true;
                 } catch (Exception e) {
                     uploadMessage = null;
@@ -79,10 +74,8 @@ public class MainActivity extends Activity {
     @Override
     protected void onActivityResult(int requestCode, int resultCode, Intent data) {
         super.onActivityResult(requestCode, resultCode, data);
-
         if (requestCode == FILE_CHOOSER_REQUEST_CODE && uploadMessage != null) {
             Uri[] results = null;
-
             if (resultCode == Activity.RESULT_OK && data != null) {
                 if (data.getClipData() != null) {
                     int count = data.getClipData().getItemCount();
@@ -94,7 +87,6 @@ public class MainActivity extends Activity {
                     results = new Uri[]{data.getData()};
                 }
             }
-
             uploadMessage.onReceiveValue(results);
             uploadMessage = null;
         }

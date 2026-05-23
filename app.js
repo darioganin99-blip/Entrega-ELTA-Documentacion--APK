@@ -129,7 +129,9 @@ function renderStep(){
       <p class="stepHint">Escanear o adjuntar documento antes de enviar. Este paso es opcional.</p>
       <div class="docBox">
         <label>Documento / Foto</label>
-        <input class="fileInput" id="docFile" type="file" accept="image/*,application/pdf,.pdf" multiple onchange="handleDocumentos(event)">
+        <input class="fileInput" id="docFile" type="file" accept="image/*,application/pdf,.pdf" multiple onchange="handleDocumentos(event)" style="display:none">
+        <button class="btn secondary" type="button" onclick="abrirSelectorDocumentos()">Seleccionar PDF / Imagen</button>
+        <button class="btn light" type="button" onclick="abrirSelectorDocumentos()">Escanear documento con cámara</button>
         <div id="docName" class="docName">${state.documentos && state.documentos.length ? state.documentos.length + " documento(s) seleccionado(s)" : "Sin documento adjunto"}</div>\n        <div id="docList" class="docList">${state.documentos && state.documentos.length ? state.documentos.map((d,i)=>`<div class="docItem">${i+1}. ${d.name}</div>`).join("") : ""}</div>\n        <div class="docNote">Podés seleccionar uno o más PDF o escanear fotos del documento con la cámara.</div>
         <img id="docPreview" class="docPreview" ${doc && doc.preview ? `src="${doc.preview}" style="display:block"` : ""}>
       </div>
@@ -296,6 +298,11 @@ ${documentosTxt}Observación general: ${state.obs || "Sin observaciones"}`;
 }
 
 
+
+function abrirSelectorDocumentos(){
+  const input = $("docFile");
+  if(input) input.click();
+}
 
 function handleDocumentos(event){
   const files = Array.from((event.target && event.target.files) ? event.target.files : []);
