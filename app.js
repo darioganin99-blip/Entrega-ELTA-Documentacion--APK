@@ -129,7 +129,7 @@ function renderStep(){
       <p class="stepHint">Escanear o adjuntar documento antes de enviar. Este paso es opcional.</p>
       <div class="docBox">
         <label>Documento / Foto</label>
-        <input class="fileInput" id="docFile" type="file" accept="image/*,.pdf" capture="environment" multiple onchange="handleDocumentos(event)">
+        <input class="fileInput" id="docFile" type="file" accept="image/*,application/pdf,.pdf" multiple onchange="handleDocumentos(event)">
         <div id="docName" class="docName">${state.documentos && state.documentos.length ? state.documentos.length + " documento(s) seleccionado(s)" : "Sin documento adjunto"}</div>\n        <div id="docList" class="docList">${state.documentos && state.documentos.length ? state.documentos.map((d,i)=>`<div class="docItem">${i+1}. ${d.name}</div>`).join("") : ""}</div>\n        <div class="docNote">Podés seleccionar uno o más PDF o escanear fotos del documento con la cámara.</div>
         <img id="docPreview" class="docPreview" ${doc && doc.preview ? `src="${doc.preview}" style="display:block"` : ""}>
       </div>
