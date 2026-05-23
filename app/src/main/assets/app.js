@@ -200,7 +200,13 @@ function getGps(){
     if(nearest) state.destino = nearest;
     else alert("No hay destinos cargados para calcular cercanía.");
     renderStep();
-  }, err=>alert("No se pudo obtener GPS: "+err.message), {enableHighAccuracy:true,timeout:20000,maximumAge:0});
+  }, err=>{
+      let msg = err.message || "Error desconocido";
+      if(err.code === 1) msg = "Permiso de ubicación denegado. Activá Ubicación para la app.";
+      if(err.code === 2) msg = "Ubicación no disponible. Activá GPS y datos móviles.";
+      if(err.code === 3) msg = "Tiempo agotado obteniendo GPS. Intentá nuevamente.";
+      alert("No se pudo obtener GPS: " + msg);
+    }, {enableHighAccuracy:true,timeout:20000,maximumAge:0});
 }
 
 function distKm(a,b,c,d){
