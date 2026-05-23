@@ -17,7 +17,7 @@ import android.webkit.WebViewClient;
 
 public class MainActivity extends Activity {
     private static final int FILE_CHOOSER_REQUEST_CODE = 101;
-    private ValueCallback<Uri[]> filePathCallback;
+    private ValueCallback<Uri[]> uploadMessage;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -36,7 +36,6 @@ public class MainActivity extends Activity {
         settings.setMediaPlaybackRequiresUserGesture(false);
 
         webView.setWebViewClient(new WebViewClient());
-
         webView.setWebChromeClient(new WebChromeClient() {
             @Override
             public void onPermissionRequest(final PermissionRequest request) {
@@ -47,29 +46,29 @@ public class MainActivity extends Activity {
 
             @Override
             public boolean onShowFileChooser(WebView webView, ValueCallback<Uri[]> filePathCallback, FileChooserParams fileChooserParams) {
-                if (MainActivity.this.filePathCallback != null) {
-                    MainActivity.this.filePathCallback.onReceiveValue(null);
+                if (uploadMessage != null) {
+                    uploadMessage.onReceiveValue(null);
                 }
-                MainActivity.this.filePathCallback = filePathCallback;
+                uploadMessage = filePathCallback;
 
-                Intent contentIntent = new Intent(Intent.ACTION_OPEN_DOCUMENT);
-                contentIntent.addCategory(Intent.CATEGORY_OPENABLE);
-                contentIntent.setType("*/*");
-                contentIntent.putExtra(Intent.EXTRA_MIME_TYPES, new String[]{"image/*", "application/pdf"});
-                contentIntent.putExtra(Intent.EXTRA_ALLOW_MULTIPLE, true);
+                Intent fileIntent = new Intent(Intent.ACTION_GET_CONTENT);
+                fileIntent.addCategory(Intent.CATEGORY_OPENABLE);
+                fileIntent.setType("*/*");
+                fileIntent.putExtra(Intent.EXTRA_MIME_TYPES, new String[]{"image/*", "application/pdf"});
+                fileIntent.putExtra(Intent.EXTRA_ALLOW_MULTIPLE, true);
 
                 Intent cameraIntent = new Intent(MediaStore.ACTION_IMAGE_CAPTURE);
 
-                Intent chooserIntent = Intent.createChooser(contentIntent, "Seleccionar o escanear documento");
-                chooserIntent.putExtra(Intent.EXTRA_INITIAL_INTENTS, new Intent[]{cameraIntent});
+                Intent chooser = Intent.createChooser(fileIntent, "Seleccionar o escanear documento");
+                chooser.putExtra(Intent.EXTRA_INITIAL_INTENTS, new Intent[]{cameraIntent});
 
                 try {
-                    startActivityForResult(chooserIntent, FILE_CHOOSER_REQUEST_CODE);
+                    startActivityForResult(chooser, FILE_CHOOSER_REQUEST_CODE);
+                    return true;
                 } catch (Exception e) {
-                    MainActivity.this.filePathCallback = null;
+                    uploadMessage = null;
                     return false;
                 }
-                return true;
             }
         });
 
@@ -81,7 +80,7 @@ public class MainActivity extends Activity {
     protected void onActivityResult(int requestCode, int resultCode, Intent data) {
         super.onActivityResult(requestCode, resultCode, data);
 
-        if (requestCode == FILE_CHOOSER_REQUEST_CODE && filePathCallback != null) {
+        if (requestCode == FILE_CHOOSER_REQUEST_CODE && uploadMessage != null) {
             Uri[] results = null;
 
             if (resultCode == Activity.RESULT_OK && data != null) {
@@ -96,8 +95,8 @@ public class MainActivity extends Activity {
                 }
             }
 
-            filePathCallback.onReceiveValue(results);
-            filePathCallback = null;
+            uploadMessage.onReceiveValue(results);
+            uploadMessage = null;
         }
     }
 }
