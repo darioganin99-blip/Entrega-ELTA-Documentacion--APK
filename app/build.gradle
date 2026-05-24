@@ -2,6 +2,12 @@ plugins {
     id 'com.android.application'
 }
 
+
+configurations.all {
+    exclude group: 'org.jetbrains.kotlin', module: 'kotlin-stdlib-jdk7'
+    exclude group: 'org.jetbrains.kotlin', module: 'kotlin-stdlib-jdk8'
+}
+
 android {
     namespace 'com.elta.entregas_doc'
     compileSdk 34
@@ -10,8 +16,8 @@ android {
         applicationId "com.elta.entregas_doc"
         minSdk 24
         targetSdk 34
-        versionCode 47
-        versionName "4.7"
+        versionCode 471
+        versionName "4.7.1"
     }
 }
 
@@ -19,4 +25,13 @@ android {
 dependencies {
     implementation "com.google.android.gms:play-services-mlkit-document-scanner:16.0.0-beta1"
     implementation "androidx.core:core:1.13.1"
+}
+
+
+configurations.all {
+    resolutionStrategy.eachDependency { details ->
+        if (details.requested.group == 'org.jetbrains.kotlin') {
+            details.useVersion '1.8.22'
+        }
+    }
 }
