@@ -193,7 +193,7 @@ public class MainActivity extends Activity {
 
             if (selectedDocumentUris.size() > 0) {
                 intent = new Intent(Intent.ACTION_SEND_MULTIPLE);
-                intent.setType("application/pdf");
+                intent.setType("*/*");
                 intent.putParcelableArrayListExtra(Intent.EXTRA_STREAM, selectedDocumentUris);
             } else {
                 intent = new Intent(Intent.ACTION_SEND);
@@ -203,26 +203,17 @@ public class MainActivity extends Activity {
             intent.putExtra(Intent.EXTRA_TEXT, message);
             intent.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION);
 
-            if (phone != null && phone.trim().length() > 0) {
-                intent.putExtra("jid", phone.replace("+", "").replace(" ", "") + "@s.whatsapp.net");
-            }
+            // NO forzar package whatsapp
+            Intent chooser = Intent.createChooser(intent, "Enviar por WhatsApp");
 
-            intent.setPackage("com.whatsapp");
+            startActivity(chooser);
 
-            try {
-                startActivity(intent);
-            } catch (Exception e1) {
-                intent.setPackage("com.whatsapp.w4b");
-                try {
-                    startActivity(intent);
-                } catch (Exception e2) {
-                    intent.setPackage(null);
-                    startActivity(Intent.createChooser(intent, "Enviar por WhatsApp"));
-                }
-            }
         } catch (Exception e) {
             if (webView != null) {
-                webView.evaluateJavascript("alert('No se pudo abrir WhatsApp para enviar adjuntos. Verificá que WhatsApp esté instalado.');", null);
+                webView.evaluateJavascript(
+                    "alert('No se pudo abrir el selector de envío. Verificá que WhatsApp esté instalado.');",
+                    null
+                );
             }
         }
     }
