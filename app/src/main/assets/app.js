@@ -155,10 +155,10 @@ function renderStep(){
     container.innerHTML=`
       <p class="stepHint">Seleccionar uno o más documentos. Este paso es opcional.</p>
       <div class="docBox">
-        <button class="btn secondary" onclick="abrirEscanerDocumentoNativo()">Escanear con cámara o seleccionar PDF</button>\n        <input class="fileInput" id="docFile" type="file" accept="image/*,application/pdf,.pdf" multiple onchange="handleDocumentos(event)">
+        <button class="btn secondary" onclick="abrirEscanerDocumentoNativo()">Escanear documento PDF</button>\n        <input class="fileInput" id="docFile" type="file" accept="image/*,application/pdf,.pdf" multiple onchange="handleDocumentos(event)">
         <div id="docName" class="docName">${state.documentos.length ? state.documentos.length + " documento(s) seleccionado(s)" : "Sin documento adjunto"}</div>
         <div id="docList" class="docList">${state.documentos.map((d,i)=>`<div class="docItem">${i+1}. ${d.name}</div>`).join("")}</div>
-        <div class="docNote">Tocá “Escanear con cámara o seleccionar PDF” para usar una app externa de escaneo y guardar el PDF. Luego se adjunta al envío de WhatsApp.</div>
+        <div class="docNote">Tocá “Escanear documento PDF” para usar una app externa de escaneo y guardar el PDF. Luego se adjunta al envío de WhatsApp.</div>
       </div>
       <div class="stepActions">
         <button class="btn back" onclick="previousStep()">Volver</button>

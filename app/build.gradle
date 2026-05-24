@@ -10,12 +10,13 @@ android {
         applicationId "com.elta.entregas_doc"
         minSdk 24
         targetSdk 34
-        versionCode 46
-        versionName "4.6"
+        versionCode 47
+        versionName "4.7"
     }
 }
 
 
 dependencies {
+    implementation "com.google.android.gms:play-services-mlkit-document-scanner:16.0.0-beta1"
     implementation "androidx.core:core:1.13.1"
 }

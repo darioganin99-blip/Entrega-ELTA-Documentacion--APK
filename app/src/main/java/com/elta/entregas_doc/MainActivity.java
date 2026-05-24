@@ -3,11 +3,11 @@ package com.elta.entregas_doc;
 import android.Manifest;
 import android.app.Activity;
 import android.content.Intent;
+import android.content.IntentSender;
 import android.content.pm.PackageManager;
 import android.net.Uri;
 import android.os.Build;
 import android.os.Bundle;
-import android.provider.MediaStore;
 import android.webkit.GeolocationPermissions;
 import android.webkit.JavascriptInterface;
 import android.webkit.PermissionRequest;
@@ -18,9 +18,11 @@ import android.webkit.WebSettings;
 import android.webkit.WebView;
 import android.webkit.WebViewClient;
 
-import androidx.core.content.FileProvider;
+import com.google.mlkit.vision.documentscanner.GmsDocumentScanner;
+import com.google.mlkit.vision.documentscanner.GmsDocumentScannerOptions;
+import com.google.mlkit.vision.documentscanner.GmsDocumentScanning;
+import com.google.mlkit.vision.documentscanner.GmsDocumentScanningResult;
 
-import java.io.File;
 import java.util.ArrayList;
 
 public class MainActivity extends Activity {
@@ -30,7 +32,6 @@ public class MainActivity extends Activity {
     private ValueCallback<Uri[]> uploadMessage;
     private WebView webView;
     private final ArrayList<Uri> selectedDocumentUris = new ArrayList<>();
-    private Uri cameraOutputUri;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -95,8 +96,22 @@ public class MainActivity extends Activity {
                     uploadMessage.onReceiveValue(null);
                 }
                 uploadMessage = filePathCallback;
-                openScannerChooser(FILE_CHOOSER_REQUEST_CODE);
-                return true;
+
+                Intent contentIntent = new Intent(Intent.ACTION_OPEN_DOCUMENT);
+                contentIntent.addCategory(Intent.CATEGORY_OPENABLE);
+                contentIntent.setType("*/*");
+                contentIntent.putExtra(Intent.EXTRA_MIME_TYPES, new String[]{"image/*", "application/pdf"});
+                contentIntent.putExtra(Intent.EXTRA_ALLOW_MULTIPLE, true);
+                contentIntent.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION);
+                contentIntent.addFlags(Intent.FLAG_GRANT_PERSISTABLE_URI_PERMISSION);
+
+                try {
+                    startActivityForResult(Intent.createChooser(contentIntent, "Seleccionar PDF o imagen"), FILE_CHOOSER_REQUEST_CODE);
+                    return true;
+                } catch (Exception e) {
+                    uploadMessage = null;
+                    return false;
+                }
             }
         });
 
@@ -118,102 +133,97 @@ public class MainActivity extends Activity {
         return false;
     }
 
-    private Uri createTempImageUri() {
-        try {
-            File file = new File(getExternalCacheDir(), "scan_" + System.currentTimeMillis() + ".jpg");
-            return FileProvider.getUriForFile(this, getPackageName() + ".fileprovider", file);
-        } catch (Exception e) {
-            return null;
-        }
-    }
-
-    private void openScannerChooser(int requestCode) {
-        selectedDocumentUris.clear();
-
-        Intent fileIntent = new Intent(Intent.ACTION_OPEN_DOCUMENT);
-        fileIntent.addCategory(Intent.CATEGORY_OPENABLE);
-        fileIntent.setType("*/*");
-        fileIntent.putExtra(Intent.EXTRA_MIME_TYPES, new String[]{"application/pdf", "image/*"});
-        fileIntent.putExtra(Intent.EXTRA_ALLOW_MULTIPLE, true);
-        fileIntent.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION);
-        fileIntent.addFlags(Intent.FLAG_GRANT_PERSISTABLE_URI_PERMISSION);
-
-        ArrayList<Intent> initialIntents = new ArrayList<>();
-
-        Intent cameraIntent = new Intent(MediaStore.ACTION_IMAGE_CAPTURE);
-        cameraOutputUri = createTempImageUri();
-        if (cameraOutputUri != null) {
-            cameraIntent.putExtra(MediaStore.EXTRA_OUTPUT, cameraOutputUri);
-            cameraIntent.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION);
-            cameraIntent.addFlags(Intent.FLAG_GRANT_WRITE_URI_PERMISSION);
-            initialIntents.add(cameraIntent);
-        }
-
-        Intent chooser = Intent.createChooser(fileIntent, "Escanear con cámara o seleccionar PDF");
-        if (!initialIntents.isEmpty()) {
-            chooser.putExtra(Intent.EXTRA_INITIAL_INTENTS, initialIntents.toArray(new Intent[0]));
-        }
-
-        try {
-            startActivityForResult(chooser, requestCode);
-        } catch (Exception e) {
-            if (webView != null) {
-                webView.evaluateJavascript("alert('No se encontró una aplicación para escanear o seleccionar documentos.');", null);
-            }
-            if (uploadMessage != null) {
-                uploadMessage.onReceiveValue(null);
-                uploadMessage = null;
-            }
-        }
-    }
-
     public class AndroidBridge {
         @JavascriptInterface
         public void openDocumentScanner() {
-            runOnUiThread(() -> openScannerChooser(DOCUMENT_SCANNER_REQUEST_CODE));
+            runOnUiThread(() -> startPdfDocumentScanner());
         }
 
         @JavascriptInterface
         public void sendWhatsappWithDocuments(String phone, String message) {
-            runOnUiThread(() -> {
-                try {
-                    Intent intent;
+            runOnUiThread(() -> sendWhatsappNative(phone, message));
+        }
+    }
 
-                    if (selectedDocumentUris.size() > 0) {
-                        intent = new Intent(Intent.ACTION_SEND_MULTIPLE);
-                        intent.setType("*/*");
-                        intent.putParcelableArrayListExtra(Intent.EXTRA_STREAM, selectedDocumentUris);
-                    } else {
-                        intent = new Intent(Intent.ACTION_SEND);
-                        intent.setType("text/plain");
-                    }
+    private void startPdfDocumentScanner() {
+        try {
+            GmsDocumentScannerOptions options =
+                new GmsDocumentScannerOptions.Builder()
+                    .setGalleryImportAllowed(true)
+                    .setPageLimit(20)
+                    .setResultFormats(
+                        GmsDocumentScannerOptions.RESULT_FORMAT_PDF,
+                        GmsDocumentScannerOptions.RESULT_FORMAT_JPEG
+                    )
+                    .setScannerMode(GmsDocumentScannerOptions.SCANNER_MODE_FULL)
+                    .build();
 
-                    intent.putExtra(Intent.EXTRA_TEXT, message);
-                    intent.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION);
+            GmsDocumentScanner scanner = GmsDocumentScanning.getClient(options);
 
-                    if (phone != null && phone.trim().length() > 0) {
-                        intent.putExtra("jid", phone.replace("+", "").replace(" ", "") + "@s.whatsapp.net");
-                    }
-
-                    intent.setPackage("com.whatsapp");
-
+            scanner.getStartScanIntent(this)
+                .addOnSuccessListener(intentSender -> {
                     try {
-                        startActivity(intent);
-                    } catch (Exception e1) {
-                        intent.setPackage("com.whatsapp.w4b");
-                        try {
-                            startActivity(intent);
-                        } catch (Exception e2) {
-                            intent.setPackage(null);
-                            startActivity(Intent.createChooser(intent, "Enviar por WhatsApp"));
-                        }
+                        startIntentSenderForResult(
+                            intentSender,
+                            DOCUMENT_SCANNER_REQUEST_CODE,
+                            null,
+                            0,
+                            0,
+                            0
+                        );
+                    } catch (IntentSender.SendIntentException e) {
+                        showScannerError();
                     }
-                } catch (Exception e) {
-                    if (webView != null) {
-                        webView.evaluateJavascript("alert('No se pudo abrir WhatsApp para enviar adjuntos. Verificá que WhatsApp esté instalado.');", null);
-                    }
+                })
+                .addOnFailureListener(e -> showScannerError());
+        } catch (Exception e) {
+            showScannerError();
+        }
+    }
+
+    private void showScannerError() {
+        if (webView != null) {
+            webView.evaluateJavascript("alert('No se pudo abrir el escáner PDF. Verificá que Google Play Services esté actualizado.');", null);
+        }
+    }
+
+    private void sendWhatsappNative(String phone, String message) {
+        try {
+            Intent intent;
+
+            if (selectedDocumentUris.size() > 0) {
+                intent = new Intent(Intent.ACTION_SEND_MULTIPLE);
+                intent.setType("application/pdf");
+                intent.putParcelableArrayListExtra(Intent.EXTRA_STREAM, selectedDocumentUris);
+            } else {
+                intent = new Intent(Intent.ACTION_SEND);
+                intent.setType("text/plain");
+            }
+
+            intent.putExtra(Intent.EXTRA_TEXT, message);
+            intent.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION);
+
+            if (phone != null && phone.trim().length() > 0) {
+                intent.putExtra("jid", phone.replace("+", "").replace(" ", "") + "@s.whatsapp.net");
+            }
+
+            intent.setPackage("com.whatsapp");
+
+            try {
+                startActivity(intent);
+            } catch (Exception e1) {
+                intent.setPackage("com.whatsapp.w4b");
+                try {
+                    startActivity(intent);
+                } catch (Exception e2) {
+                    intent.setPackage(null);
+                    startActivity(Intent.createChooser(intent, "Enviar por WhatsApp"));
                 }
-            });
+            }
+        } catch (Exception e) {
+            if (webView != null) {
+                webView.evaluateJavascript("alert('No se pudo abrir WhatsApp para enviar adjuntos. Verificá que WhatsApp esté instalado.');", null);
+            }
         }
     }
 
@@ -221,13 +231,8 @@ public class MainActivity extends Activity {
     protected void onActivityResult(int requestCode, int resultCode, Intent data) {
         super.onActivityResult(requestCode, resultCode, data);
 
-        Uri[] results = extractUris(resultCode, data);
-
-        if (results == null && resultCode == Activity.RESULT_OK && cameraOutputUri != null) {
-            results = new Uri[]{cameraOutputUri};
-        }
-
         if (requestCode == FILE_CHOOSER_REQUEST_CODE && uploadMessage != null) {
+            Uri[] results = extractUris(resultCode, data);
             uploadMessage.onReceiveValue(results);
             uploadMessage = null;
         }
@@ -235,18 +240,16 @@ public class MainActivity extends Activity {
         if (requestCode == DOCUMENT_SCANNER_REQUEST_CODE) {
             selectedDocumentUris.clear();
 
-            if (results != null && results.length > 0) {
-                StringBuilder names = new StringBuilder();
+            if (resultCode == Activity.RESULT_OK && data != null) {
+                GmsDocumentScanningResult result = GmsDocumentScanningResult.fromActivityResultIntent(data);
 
-                for (int i = 0; i < results.length; i++) {
-                    selectedDocumentUris.add(results[i]);
-                    if (i > 0) names.append(",");
-                    names.append("Documento ").append(i + 1);
-                }
+                if (result != null && result.getPdf() != null && result.getPdf().getUri() != null) {
+                    selectedDocumentUris.add(result.getPdf().getUri());
 
-                if (webView != null) {
-                    String js = "if(window.onNativeDocumentSelected) window.onNativeDocumentSelected('" + names.toString() + "');";
-                    webView.evaluateJavascript(js, null);
+                    if (webView != null) {
+                        String js = "if(window.onNativeDocumentSelected) window.onNativeDocumentSelected('Documento PDF escaneado');";
+                        webView.evaluateJavascript(js, null);
+                    }
                 }
             }
         }
