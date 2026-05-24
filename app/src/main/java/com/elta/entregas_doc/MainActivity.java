@@ -7,6 +7,7 @@ import android.content.pm.PackageManager;
 import android.net.Uri;
 import android.os.Build;
 import android.os.Bundle;
+import android.provider.MediaStore;
 import android.webkit.GeolocationPermissions;
 import android.webkit.JavascriptInterface;
 import android.webkit.PermissionRequest;
@@ -17,6 +18,9 @@ import android.webkit.WebSettings;
 import android.webkit.WebView;
 import android.webkit.WebViewClient;
 
+import androidx.core.content.FileProvider;
+
+import java.io.File;
 import java.util.ArrayList;
 
 public class MainActivity extends Activity {
@@ -26,6 +30,7 @@ public class MainActivity extends Activity {
     private ValueCallback<Uri[]> uploadMessage;
     private WebView webView;
     private final ArrayList<Uri> selectedDocumentUris = new ArrayList<>();
+    private Uri cameraOutputUri;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -90,22 +95,8 @@ public class MainActivity extends Activity {
                     uploadMessage.onReceiveValue(null);
                 }
                 uploadMessage = filePathCallback;
-
-                Intent contentIntent = new Intent(Intent.ACTION_OPEN_DOCUMENT);
-                contentIntent.addCategory(Intent.CATEGORY_OPENABLE);
-                contentIntent.setType("*/*");
-                contentIntent.putExtra(Intent.EXTRA_MIME_TYPES, new String[]{"image/*", "application/pdf"});
-                contentIntent.putExtra(Intent.EXTRA_ALLOW_MULTIPLE, true);
-                contentIntent.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION);
-                contentIntent.addFlags(Intent.FLAG_GRANT_PERSISTABLE_URI_PERMISSION);
-
-                try {
-                    startActivityForResult(Intent.createChooser(contentIntent, "Seleccionar documento"), FILE_CHOOSER_REQUEST_CODE);
-                    return true;
-                } catch (Exception e) {
-                    uploadMessage = null;
-                    return false;
-                }
+                openScannerChooser(FILE_CHOOSER_REQUEST_CODE);
+                return true;
             }
         });
 
@@ -115,7 +106,6 @@ public class MainActivity extends Activity {
 
     private boolean handleExternalUrl(String url) {
         if (url == null) return false;
-
         if (url.startsWith("https://wa.me/") || url.startsWith("http://wa.me/") || url.startsWith("whatsapp://")) {
             try {
                 Intent intent = new Intent(Intent.ACTION_VIEW, Uri.parse(url));
@@ -125,34 +115,62 @@ public class MainActivity extends Activity {
                 return false;
             }
         }
-
         return false;
+    }
+
+    private Uri createTempImageUri() {
+        try {
+            File file = new File(getExternalCacheDir(), "scan_" + System.currentTimeMillis() + ".jpg");
+            return FileProvider.getUriForFile(this, getPackageName() + ".fileprovider", file);
+        } catch (Exception e) {
+            return null;
+        }
+    }
+
+    private void openScannerChooser(int requestCode) {
+        selectedDocumentUris.clear();
+
+        Intent fileIntent = new Intent(Intent.ACTION_OPEN_DOCUMENT);
+        fileIntent.addCategory(Intent.CATEGORY_OPENABLE);
+        fileIntent.setType("*/*");
+        fileIntent.putExtra(Intent.EXTRA_MIME_TYPES, new String[]{"application/pdf", "image/*"});
+        fileIntent.putExtra(Intent.EXTRA_ALLOW_MULTIPLE, true);
+        fileIntent.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION);
+        fileIntent.addFlags(Intent.FLAG_GRANT_PERSISTABLE_URI_PERMISSION);
+
+        ArrayList<Intent> initialIntents = new ArrayList<>();
+
+        Intent cameraIntent = new Intent(MediaStore.ACTION_IMAGE_CAPTURE);
+        cameraOutputUri = createTempImageUri();
+        if (cameraOutputUri != null) {
+            cameraIntent.putExtra(MediaStore.EXTRA_OUTPUT, cameraOutputUri);
+            cameraIntent.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION);
+            cameraIntent.addFlags(Intent.FLAG_GRANT_WRITE_URI_PERMISSION);
+            initialIntents.add(cameraIntent);
+        }
+
+        Intent chooser = Intent.createChooser(fileIntent, "Escanear con cámara o seleccionar PDF");
+        if (!initialIntents.isEmpty()) {
+            chooser.putExtra(Intent.EXTRA_INITIAL_INTENTS, initialIntents.toArray(new Intent[0]));
+        }
+
+        try {
+            startActivityForResult(chooser, requestCode);
+        } catch (Exception e) {
+            if (webView != null) {
+                webView.evaluateJavascript("alert('No se encontró una aplicación para escanear o seleccionar documentos.');", null);
+            }
+            if (uploadMessage != null) {
+                uploadMessage.onReceiveValue(null);
+                uploadMessage = null;
+            }
+        }
     }
 
     public class AndroidBridge {
         @JavascriptInterface
         public void openDocumentScanner() {
-            runOnUiThread(() -> {
-                selectedDocumentUris.clear();
-
-                Intent pdfIntent = new Intent(Intent.ACTION_OPEN_DOCUMENT);
-                pdfIntent.addCategory(Intent.CATEGORY_OPENABLE);
-                pdfIntent.setType("*/*");
-                pdfIntent.putExtra(Intent.EXTRA_MIME_TYPES, new String[]{"application/pdf", "image/*"});
-                pdfIntent.putExtra(Intent.EXTRA_ALLOW_MULTIPLE, true);
-                pdfIntent.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION);
-                pdfIntent.addFlags(Intent.FLAG_GRANT_PERSISTABLE_URI_PERMISSION);
-
-                Intent chooser = Intent.createChooser(pdfIntent, "Escanear o seleccionar documento PDF");
-
-                try {
-                    startActivityForResult(chooser, DOCUMENT_SCANNER_REQUEST_CODE);
-                } catch (Exception e) {
-                    if (webView != null) {
-                        webView.evaluateJavascript("alert('No se encontró una aplicación para escanear o seleccionar documentos. Instalá una app de escaneo como Google Drive, Microsoft Lens, Adobe Scan o CamScanner.');", null);
-                    }
-                }
-            });
+            runOnUiThread(() -> openScannerChooser(DOCUMENT_SCANNER_REQUEST_CODE));
         }
 
         @JavascriptInterface
@@ -181,11 +199,11 @@ public class MainActivity extends Activity {
 
                     try {
                         startActivity(intent);
-                    } catch (Exception whatsappBusinessOrChooser) {
+                    } catch (Exception e1) {
                         intent.setPackage("com.whatsapp.w4b");
                         try {
                             startActivity(intent);
-                        } catch (Exception chooser) {
+                        } catch (Exception e2) {
                             intent.setPackage(null);
                             startActivity(Intent.createChooser(intent, "Enviar por WhatsApp"));
                         }
@@ -203,14 +221,18 @@ public class MainActivity extends Activity {
     protected void onActivityResult(int requestCode, int resultCode, Intent data) {
         super.onActivityResult(requestCode, resultCode, data);
 
+        Uri[] results = extractUris(resultCode, data);
+
+        if (results == null && resultCode == Activity.RESULT_OK && cameraOutputUri != null) {
+            results = new Uri[]{cameraOutputUri};
+        }
+
         if (requestCode == FILE_CHOOSER_REQUEST_CODE && uploadMessage != null) {
-            Uri[] results = extractUris(resultCode, data);
             uploadMessage.onReceiveValue(results);
             uploadMessage = null;
         }
 
         if (requestCode == DOCUMENT_SCANNER_REQUEST_CODE) {
-            Uri[] results = extractUris(resultCode, data);
             selectedDocumentUris.clear();
 
             if (results != null && results.length > 0) {
