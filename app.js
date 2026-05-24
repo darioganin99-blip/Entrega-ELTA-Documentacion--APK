@@ -155,7 +155,7 @@ function renderStep(){
     container.innerHTML=`
       <p class="stepHint">Seleccionar uno o más documentos. Este paso es opcional.</p>
       <div class="docBox">
-        <input class="fileInput" id="docFile" type="file" accept="image/*,application/pdf,.pdf" multiple onchange="handleDocumentos(event)">
+        <button class="btn secondary" onclick="abrirEscanerDocumentoNativo()">Escanear documento / PDF</button>\n        <input class="fileInput" id="docFile" type="file" accept="image/*,application/pdf,.pdf" multiple onchange="handleDocumentos(event)">
         <div id="docName" class="docName">${state.documentos.length ? state.documentos.length + " documento(s) seleccionado(s)" : "Sin documento adjunto"}</div>
         <div id="docList" class="docList">${state.documentos.map((d,i)=>`<div class="docItem">${i+1}. ${d.name}</div>`).join("")}</div>
         <div class="docNote">Podés seleccionar PDF o imágenes. Para escanear, elegí la cámara si Android la ofrece.</div>
@@ -323,6 +323,25 @@ function renderDestinoEntrega(){
     </div>`;
 }
 
+
+function abrirEscanerDocumentoNativo(){
+  if(window.AndroidBridge && AndroidBridge.openDocumentScanner){
+    AndroidBridge.openDocumentScanner();
+  }else{
+    const input = $("docFile");
+    if(input) input.click();
+    else alert("Selector de documentos no disponible.");
+  }
+}
+
+window.onNativeDocumentSelected = function(names){
+  const list = String(names || "").split(",").filter(Boolean);
+  if(!state.documentos) state.documentos = [];
+  list.forEach(n => state.documentos.push({name:n, type:"application/pdf", size:0}));
+  state.documento = state.documentos[0] || null;
+  renderStep();
+};
+
 function handleDocumentos(event){
   const files = Array.from((event.target && event.target.files) ? event.target.files : []);
   state.documentos = files.map((file, index) => ({name:file.name || ("documento_" + (index + 1)), type:file.type || "", size:file.size || 0}));
@@ -353,7 +372,7 @@ function sendWhatsapp(){
   const u=user();
   if(!u.phone){ alert("Cargá el teléfono de WhatsApp en Usuario."); show("usuario"); return; }
   const msg=buildMessage(true);
-  const url=`https://wa.me/${u.phone}?text=${encodeURIComponent(msg)}`;
+  const url=`whatsapp://send?phone=${u.phone}&text=${encodeURIComponent(msg)}`;
   state={gps:null,destino:null,lote:"",vins:[],obs:"Sin observaciones",documento:null,documentos:[]};
   step=1;
   window.location.href=url;
