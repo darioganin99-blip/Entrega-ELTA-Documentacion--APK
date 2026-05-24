@@ -155,10 +155,10 @@ function renderStep(){
     container.innerHTML=`
       <p class="stepHint">Seleccionar uno o más documentos. Este paso es opcional.</p>
       <div class="docBox">
-        <button class="btn secondary" onclick="abrirEscanerDocumentoNativo()">Escanear documento / PDF</button>\n        <input class="fileInput" id="docFile" type="file" accept="image/*,application/pdf,.pdf" multiple onchange="handleDocumentos(event)">
+        <button class="btn secondary" onclick="abrirEscanerDocumentoNativo()">Abrir app de escaneo / PDF</button>\n        <input class="fileInput" id="docFile" type="file" accept="image/*,application/pdf,.pdf" multiple onchange="handleDocumentos(event)">
         <div id="docName" class="docName">${state.documentos.length ? state.documentos.length + " documento(s) seleccionado(s)" : "Sin documento adjunto"}</div>
         <div id="docList" class="docList">${state.documentos.map((d,i)=>`<div class="docItem">${i+1}. ${d.name}</div>`).join("")}</div>
-        <div class="docNote">Podés seleccionar PDF o imágenes. Para escanear, elegí la cámara si Android la ofrece.</div>
+        <div class="docNote">Tocá “Abrir app de escaneo / PDF” para usar una app externa de escaneo y guardar el PDF. Luego se adjunta al envío de WhatsApp.</div>
       </div>
       <div class="stepActions">
         <button class="btn back" onclick="previousStep()">Volver</button>
@@ -372,10 +372,16 @@ function sendWhatsapp(){
   const u=user();
   if(!u.phone){ alert("Cargá el teléfono de WhatsApp en Usuario."); show("usuario"); return; }
   const msg=buildMessage(true);
-  const url=`whatsapp://send?phone=${u.phone}&text=${encodeURIComponent(msg)}`;
+
+  if(window.AndroidBridge && AndroidBridge.sendWhatsappWithDocuments){
+    AndroidBridge.sendWhatsappWithDocuments(u.phone, msg);
+  }else{
+    const url=`whatsapp://send?phone=${u.phone}&text=${encodeURIComponent(msg)}`;
+    window.location.href=url;
+  }
+
   state={gps:null,destino:null,lote:"",vins:[],obs:"Sin observaciones",documento:null,documentos:[]};
   step=1;
-  window.location.href=url;
   setTimeout(renderStep,800);
 }
 
