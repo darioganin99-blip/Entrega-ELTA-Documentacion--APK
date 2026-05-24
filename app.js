@@ -380,9 +380,12 @@ function sendWhatsapp(){
     window.location.href=url;
   }
 
-  state={gps:null,destino:null,lote:"",vins:[],obs:"Sin observaciones",documento:null,documentos:[]};
-  step=1;
-  setTimeout(renderStep,800);
+  // No limpiar documentos inmediatamente: Android necesita los adjuntos para abrir el selector.
+  setTimeout(()=>{
+    state={gps:null,destino:null,lote:"",vins:[],obs:"Sin observaciones",documento:null,documentos:[]};
+    step=1;
+    renderStep();
+  },5000);
 }
 
 function resendLast(){
