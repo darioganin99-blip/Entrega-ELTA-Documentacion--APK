@@ -189,70 +189,33 @@ public class MainActivity extends Activity {
 
     private void sendWhatsappNative(String phone, String message) {
         try {
-            String cleanPhone = phone == null ? "" : phone.replace("+", "").replace(" ", "").replace("-", "").trim();
+            Intent intent;
 
-            // Sin adjuntos: abrir WhatsApp por URI, es lo mas compatible
-            if (selectedDocumentUris.size() == 0) {
-                try {
-                    Intent waIntent = new Intent(Intent.ACTION_VIEW);
-                    waIntent.setData(Uri.parse("whatsapp://send?phone=" + cleanPhone + "&text=" + Uri.encode(message)));
-                    startActivity(waIntent);
-                    return;
-                } catch (Exception ignored) {
-                    Intent webIntent = new Intent(Intent.ACTION_VIEW);
-                    webIntent.setData(Uri.parse("https://wa.me/" + cleanPhone + "?text=" + Uri.encode(message)));
-                    startActivity(webIntent);
-                    return;
-                }
+            if (selectedDocumentUris.size() > 0) {
+                intent = new Intent(Intent.ACTION_SEND_MULTIPLE);
+                intent.setType("*/*");
+                intent.putParcelableArrayListExtra(Intent.EXTRA_STREAM, selectedDocumentUris);
+            } else {
+                intent = new Intent(Intent.ACTION_SEND);
+                intent.setType("text/plain");
             }
 
-            // Con adjuntos: enviar como ACTION_SEND_MULTIPLE
-            Intent sendIntent = new Intent(Intent.ACTION_SEND_MULTIPLE);
-            sendIntent.setType("*/*");
-            sendIntent.putExtra(Intent.EXTRA_TEXT, message);
-            sendIntent.putParcelableArrayListExtra(Intent.EXTRA_STREAM, selectedDocumentUris);
-            sendIntent.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION);
+            intent.putExtra(Intent.EXTRA_TEXT, message);
+            intent.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION);
 
-            if (cleanPhone.length() > 0) {
-                sendIntent.putExtra("jid", cleanPhone + "@s.whatsapp.net");
-            }
-
-            // Probar WhatsApp normal
-            if (isPackageInstalled("com.whatsapp")) {
-                sendIntent.setPackage("com.whatsapp");
-                startActivity(sendIntent);
-                return;
-            }
-
-            // Probar WhatsApp Business
-            if (isPackageInstalled("com.whatsapp.w4b")) {
-                sendIntent.setPackage("com.whatsapp.w4b");
-                startActivity(sendIntent);
-                return;
-            }
-
-            // Fallback: selector general
-            sendIntent.setPackage(null);
-            startActivity(Intent.createChooser(sendIntent, "Enviar por WhatsApp"));
+            Intent chooser = Intent.createChooser(intent, "Enviar registro");
+            startActivity(chooser);
 
         } catch (Exception e) {
             if (webView != null) {
                 webView.evaluateJavascript(
-                    "alert('No se pudo abrir WhatsApp. Verificá que WhatsApp tenga permisos y que los documentos sigan seleccionados.');",
+                    "alert('No se pudo abrir el selector de envío. Probá compartir manualmente desde WhatsApp o verificá permisos de Android.');",
                     null
                 );
             }
         }
     }
 
-    private boolean isPackageInstalled(String packageName) {
-        try {
-            getPackageManager().getPackageInfo(packageName, 0);
-            return true;
-        } catch (Exception e) {
-            return false;
-        }
-    }
 
     @Override
     protected void onActivityResult(int requestCode, int resultCode, Intent data) {
