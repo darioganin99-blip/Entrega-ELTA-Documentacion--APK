@@ -376,7 +376,7 @@ function sendWhatsapp(){
   if(window.AndroidBridge && AndroidBridge.sendWhatsappWithDocuments){
     AndroidBridge.sendWhatsappWithDocuments(u.phone, msg);
   }else{
-    const url=`whatsapp://send?phone=${u.phone}&text=${encodeURIComponent(msg)}`;
+    const url=`https://wa.me/${u.phone}?text=${encodeURIComponent(msg)}`;
     window.location.href=url;
   }
 
