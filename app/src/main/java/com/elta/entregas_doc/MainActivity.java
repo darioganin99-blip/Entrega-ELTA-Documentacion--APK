@@ -187,7 +187,7 @@ public class MainActivity extends Activity {
         }
     }
 
-    private Uri copyUriToShareCache(Uri sourceUri, String fileName) {
+        private Uri copyUriToShareCache(Uri sourceUri, String fileName) {
         try {
             File dir = new File(getCacheDir(), "shared_docs");
             if (!dir.exists()) dir.mkdirs();
@@ -203,32 +203,14 @@ public class MainActivity extends Activity {
             }
 
             if (in != null) in.close();
+            out.flush();
             out.close();
 
             return FileProvider.getUriForFile(this, getPackageName() + ".fileprovider", outFile);
         } catch (Exception e) {
-            return sourceUri;
-        }
-    }
-
-
-    private Uri createTextInfoFile(String message) {
-        try {
-            File dir = new File(getCacheDir(), "shared_docs");
-            if (!dir.exists()) dir.mkdirs();
-
-            File outFile = new File(dir, "ELTA_registro.txt");
-            OutputStreamWriter writer = new OutputStreamWriter(
-                new FileOutputStream(outFile),
-                StandardCharsets.UTF_8
-            );
-
-            writer.write(message == null ? "" : message);
-            writer.flush();
-            writer.close();
-
-            return FileProvider.getUriForFile(this, getPackageName() + ".fileprovider", outFile);
-        } catch (Exception e) {
+            if (webView != null) {
+                webView.evaluateJavascript("alert('No se pudo preparar el PDF adjunto para WhatsApp.');", null);
+            }
             return null;
         }
     }
@@ -243,15 +225,13 @@ public class MainActivity extends Activity {
                 ArrayList<Uri> shareUris = new ArrayList<>();
 
                 for (int i = 0; i < selectedDocumentUris.size(); i++) {
-                    shareUris.add(copyUriToShareCache(selectedDocumentUris.get(i), "ELTA_documento_" + (i + 1) + ".pdf"));
+                    Uri preparedUri = copyUriToShareCache(selectedDocumentUris.get(i), "ELTA_documento_" + (i + 1) + ".pdf");
+                    if (preparedUri != null) shareUris.add(preparedUri);
                 }
 
-                // Archivo TXT con toda la información de entrega.
-                // WhatsApp a veces ignora EXTRA_TEXT cuando se envían documentos,
-                // por eso se adjunta este TXT junto al PDF para no perder datos.
-                Uri infoTxt = createTextInfoFile(message);
-                if (infoTxt != null) {
-                    shareUris.add(infoTxt);
+                if (shareUris.size() == 0) {
+                    openWhatsappText(cleanPhone, message);
+                    return;
                 }
 
                 Intent shareIntent = buildShareIntentWithDocuments(cleanPhone, message, shareUris);
@@ -292,7 +272,7 @@ public class MainActivity extends Activity {
         }
     }
 
-    private Intent buildShareIntentWithDocuments(String cleanPhone, String message, ArrayList<Uri> shareUris) {
+        private Intent buildShareIntentWithDocuments(String cleanPhone, String message, ArrayList<Uri> shareUris) {
         Intent shareIntent;
 
         if (shareUris.size() == 1) {
@@ -303,7 +283,7 @@ public class MainActivity extends Activity {
             shareIntent.putParcelableArrayListExtra(Intent.EXTRA_STREAM, shareUris);
         }
 
-        shareIntent.setType("*/*");
+        shareIntent.setType("application/pdf");
         shareIntent.putExtra(Intent.EXTRA_TEXT, message);
         shareIntent.putExtra(Intent.EXTRA_SUBJECT, "ELTA - Registro de entrega");
         shareIntent.putExtra(Intent.EXTRA_TITLE, "ELTA - Registro de entrega");
@@ -318,7 +298,7 @@ public class MainActivity extends Activity {
         for (int i = 0; i < shareUris.size(); i++) {
             Uri uri = shareUris.get(i);
             if (i == 0) {
-                clipData = ClipData.newUri(getContentResolver(), "Documento", uri);
+                clipData = ClipData.newUri(getContentResolver(), "Documento PDF", uri);
             } else if (clipData != null) {
                 clipData.addItem(new ClipData.Item(uri));
             }
