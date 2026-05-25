@@ -1,6 +1,9 @@
 package com.elta.entregas_doc;
 
 import android.Manifest;
+import android.content.ClipData;
+import android.content.ClipboardManager;
+import android.content.Context;
 import android.app.Activity;
 import android.content.ClipData;
 import android.content.Intent;
@@ -208,53 +211,111 @@ public class MainActivity extends Activity {
     private void sendWhatsappNative(String phone, String message) {
         String cleanPhone = phone == null ? "" : phone.replace("+", "").replace(" ", "").replace("-", "").trim();
 
+        copyTextToClipboard(message);
+
         try {
             if (selectedDocumentUris != null && selectedDocumentUris.size() > 0) {
                 ArrayList<Uri> shareUris = new ArrayList<>();
+
                 for (int i = 0; i < selectedDocumentUris.size(); i++) {
                     shareUris.add(copyUriToShareCache(selectedDocumentUris.get(i), "ELTA_documento_" + (i + 1) + ".pdf"));
                 }
 
-                Intent shareIntent;
-                if (shareUris.size() == 1) {
-                    shareIntent = new Intent(Intent.ACTION_SEND);
-                    shareIntent.putExtra(Intent.EXTRA_STREAM, shareUris.get(0));
-                } else {
-                    shareIntent = new Intent(Intent.ACTION_SEND_MULTIPLE);
-                    shareIntent.putParcelableArrayListExtra(Intent.EXTRA_STREAM, shareUris);
+                Intent shareIntent = buildShareIntentWithDocuments(cleanPhone, message, shareUris);
+
+                if (isPackageInstalled("com.whatsapp")) {
+                    shareIntent.setPackage("com.whatsapp");
+                    startActivity(shareIntent);
+                    return;
                 }
 
-                shareIntent.setType("application/pdf");
-                shareIntent.putExtra(Intent.EXTRA_TEXT, message);
-                shareIntent.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION);
-
-                ClipData clipData = null;
-                for (int i = 0; i < shareUris.size(); i++) {
-                    Uri uri = shareUris.get(i);
-                    if (i == 0) {
-                        clipData = ClipData.newUri(getContentResolver(), "Documento", uri);
-                    } else if (clipData != null) {
-                        clipData.addItem(new ClipData.Item(uri));
-                    }
+                if (isPackageInstalled("com.whatsapp.w4b")) {
+                    shareIntent.setPackage("com.whatsapp.w4b");
+                    startActivity(shareIntent);
+                    return;
                 }
-                if (clipData != null) shareIntent.setClipData(clipData);
 
-                grantUrisToCompatibleApps(shareIntent, shareUris);
+                shareIntent.setPackage(null);
                 startActivity(Intent.createChooser(shareIntent, "Enviar registro con documentos"));
                 return;
             }
 
             openWhatsappText(cleanPhone, message);
+
         } catch (Exception firstError) {
             try {
-                openWhatsappText(cleanPhone, message);
+                Intent fallback = new Intent(Intent.ACTION_SEND);
+                fallback.setType("text/plain");
+                fallback.putExtra(Intent.EXTRA_TEXT, message);
+                startActivity(Intent.createChooser(fallback, "Enviar registro"));
             } catch (Exception secondError) {
                 if (webView != null) {
-                    webView.evaluateJavascript("alert('No se pudieron enviar los documentos por WhatsApp');", null);
+                    webView.evaluateJavascript(
+                        "alert('No se pudo abrir WhatsApp. El texto quedó copiado al portapapeles.');",
+                        null
+                    );
                 }
             }
         }
     }
+
+    private Intent buildShareIntentWithDocuments(String cleanPhone, String message, ArrayList<Uri> shareUris) {
+        Intent shareIntent;
+
+        if (shareUris.size() == 1) {
+            shareIntent = new Intent(Intent.ACTION_SEND);
+            shareIntent.putExtra(Intent.EXTRA_STREAM, shareUris.get(0));
+        } else {
+            shareIntent = new Intent(Intent.ACTION_SEND_MULTIPLE);
+            shareIntent.putParcelableArrayListExtra(Intent.EXTRA_STREAM, shareUris);
+        }
+
+        shareIntent.setType("application/pdf");
+        shareIntent.putExtra(Intent.EXTRA_TEXT, message);
+        shareIntent.putExtra(Intent.EXTRA_SUBJECT, "ELTA - Registro de entrega");
+
+        if (cleanPhone != null && cleanPhone.length() > 0) {
+            shareIntent.putExtra("jid", cleanPhone + "@s.whatsapp.net");
+        }
+
+        shareIntent.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION);
+
+        ClipData clipData = null;
+        for (int i = 0; i < shareUris.size(); i++) {
+            Uri uri = shareUris.get(i);
+            if (i == 0) {
+                clipData = ClipData.newUri(getContentResolver(), "Documento", uri);
+            } else if (clipData != null) {
+                clipData.addItem(new ClipData.Item(uri));
+            }
+        }
+
+        if (clipData != null) {
+            shareIntent.setClipData(clipData);
+        }
+
+        grantUrisToCompatibleApps(shareIntent, shareUris);
+
+        return shareIntent;
+    }
+
+    private boolean isPackageInstalled(String packageName) {
+        try {
+            getPackageManager().getPackageInfo(packageName, 0);
+            return true;
+        } catch (Exception e) {
+            return false;
+        }
+    }
+
+    private void copyTextToClipboard(String message) {
+        try {
+            ClipboardManager clipboard = (ClipboardManager) getSystemService(Context.CLIPBOARD_SERVICE);
+            android.content.ClipData clip = android.content.ClipData.newPlainText("ELTA Registro", message);
+            clipboard.setPrimaryClip(clip);
+        } catch (Exception ignored) {}
+    }
+
 
     private void grantUrisToCompatibleApps(Intent intent, ArrayList<Uri> uris) {
         try {
