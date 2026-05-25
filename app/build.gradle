@@ -11,13 +11,14 @@ android {
         applicationId "com.elta.entregas_doc"
         minSdk 24
         targetSdk 34
-        versionCode 485
-        versionName "4.8.5"
+        versionCode 490
+        versionName "4.9"
     }
 }
 
 
 dependencies {
+    implementation "com.tom-roush:pdfbox-android:2.0.27.0"
     implementation "com.google.android.gms:play-services-mlkit-document-scanner:16.0.0-beta1"
     implementation "androidx.core:core:1.13.1"
 }

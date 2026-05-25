@@ -1,15 +1,18 @@
 package com.elta.entregas_doc;
 
 import android.Manifest;
+import android.app.Activity;
 import android.content.ClipData;
 import android.content.ClipboardManager;
 import android.content.Context;
-import android.app.Activity;
-import android.content.ClipData;
 import android.content.Intent;
 import android.content.IntentSender;
 import android.content.pm.PackageManager;
 import android.content.pm.ResolveInfo;
+import android.graphics.Canvas;
+import android.graphics.Paint;
+import android.graphics.Typeface;
+import android.graphics.pdf.PdfDocument;
 import android.net.Uri;
 import android.os.Build;
 import android.os.Bundle;
@@ -30,12 +33,13 @@ import com.google.mlkit.vision.documentscanner.GmsDocumentScannerOptions;
 import com.google.mlkit.vision.documentscanner.GmsDocumentScanning;
 import com.google.mlkit.vision.documentscanner.GmsDocumentScanningResult;
 
+import com.tom_roush.pdfbox.android.PDFBoxResourceLoader;
+import com.tom_roush.pdfbox.io.MemoryUsageSetting;
+import com.tom_roush.pdfbox.multipdf.PDFMergerUtility;
+
 import java.io.File;
 import java.io.FileOutputStream;
 import java.io.InputStream;
-import java.io.OutputStreamWriter;
-import java.nio.charset.StandardCharsets;
-
 import java.util.ArrayList;
 import java.util.List;
 
@@ -187,12 +191,15 @@ public class MainActivity extends Activity {
         }
     }
 
-        private Uri copyUriToShareCache(Uri sourceUri, String fileName) {
-        try {
-            File dir = new File(getCacheDir(), "shared_docs");
-            if (!dir.exists()) dir.mkdirs();
+    private File getSharedDir() {
+        File dir = new File(getCacheDir(), "shared_docs");
+        if (!dir.exists()) dir.mkdirs();
+        return dir;
+    }
 
-            File outFile = new File(dir, fileName);
+    private File copyUriToFile(Uri sourceUri, String fileName) {
+        try {
+            File outFile = new File(getSharedDir(), fileName);
             InputStream in = getContentResolver().openInputStream(sourceUri);
             FileOutputStream out = new FileOutputStream(outFile);
 
@@ -206,10 +213,109 @@ public class MainActivity extends Activity {
             out.flush();
             out.close();
 
-            return FileProvider.getUriForFile(this, getPackageName() + ".fileprovider", outFile);
+            return outFile;
+        } catch (Exception e) {
+            return null;
+        }
+    }
+
+    private File createSummaryPdfFile(String message) {
+        try {
+            File outFile = new File(getSharedDir(), "ELTA_Resumen_Entrega.pdf");
+
+            PdfDocument document = new PdfDocument();
+            PdfDocument.PageInfo pageInfo = new PdfDocument.PageInfo.Builder(595, 842, 1).create();
+            PdfDocument.Page page = document.startPage(pageInfo);
+            Canvas canvas = page.getCanvas();
+
+            Paint titlePaint = new Paint();
+            titlePaint.setColor(0xFF111827);
+            titlePaint.setTextSize(18);
+            titlePaint.setTypeface(Typeface.create(Typeface.DEFAULT, Typeface.BOLD));
+
+            Paint bodyPaint = new Paint();
+            bodyPaint.setColor(0xFF111827);
+            bodyPaint.setTextSize(12);
+
+            int x = 40;
+            int y = 50;
+            canvas.drawText("ELTA - Registro de Entrega", x, y, titlePaint);
+            y += 30;
+
+            String[] lines = (message == null ? "" : message).split("\\n");
+            for (String line : lines) {
+                if (y > 800) {
+                    document.finishPage(page);
+                    page = document.startPage(new PdfDocument.PageInfo.Builder(595, 842, document.getPages().size() + 1).create());
+                    canvas = page.getCanvas();
+                    y = 50;
+                }
+
+                List<String> wrapped = wrapLine(line, 85);
+                for (String part : wrapped) {
+                    canvas.drawText(part, x, y, bodyPaint);
+                    y += 18;
+                }
+            }
+
+            document.finishPage(page);
+
+            FileOutputStream out = new FileOutputStream(outFile);
+            document.writeTo(out);
+            document.close();
+            out.close();
+
+            return outFile;
+        } catch (Exception e) {
+            return null;
+        }
+    }
+
+    private List<String> wrapLine(String text, int maxChars) {
+        ArrayList<String> result = new ArrayList<>();
+        if (text == null) {
+            result.add("");
+            return result;
+        }
+
+        String remaining = text;
+        while (remaining.length() > maxChars) {
+            int cut = remaining.lastIndexOf(" ", maxChars);
+            if (cut <= 0) cut = maxChars;
+            result.add(remaining.substring(0, cut));
+            remaining = remaining.substring(cut).trim();
+        }
+        result.add(remaining);
+        return result;
+    }
+
+    private Uri buildCompleteDeliveryPdf(String message) {
+        try {
+            PDFBoxResourceLoader.init(getApplicationContext());
+
+            File summaryPdf = createSummaryPdfFile(message);
+            if (summaryPdf == null) return null;
+
+            File finalPdf = new File(getSharedDir(), "ELTA_Entrega_Completa.pdf");
+
+            PDFMergerUtility merger = new PDFMergerUtility();
+            merger.setDestinationFileName(finalPdf.getAbsolutePath());
+
+            // Primero resumen de entrega
+            merger.addSource(summaryPdf);
+
+            // Luego PDFs escaneados/adjuntos
+            for (int i = 0; i < selectedDocumentUris.size(); i++) {
+                File copied = copyUriToFile(selectedDocumentUris.get(i), "ELTA_documento_" + (i + 1) + ".pdf");
+                if (copied != null) merger.addSource(copied);
+            }
+
+            merger.mergeDocuments(MemoryUsageSetting.setupMainMemoryOnly());
+
+            return FileProvider.getUriForFile(this, getPackageName() + ".fileprovider", finalPdf);
         } catch (Exception e) {
             if (webView != null) {
-                webView.evaluateJavascript("alert('No se pudo preparar el PDF adjunto para WhatsApp.');", null);
+                webView.evaluateJavascript("alert('No se pudo combinar el PDF final.');", null);
             }
             return null;
         }
@@ -217,102 +323,66 @@ public class MainActivity extends Activity {
 
     private void sendWhatsappNative(String phone, String message) {
         String cleanPhone = phone == null ? "" : phone.replace("+", "").replace(" ", "").replace("-", "").trim();
-
         copyTextToClipboard(message);
 
         try {
             if (selectedDocumentUris != null && selectedDocumentUris.size() > 0) {
-                ArrayList<Uri> shareUris = new ArrayList<>();
+                Uri finalPdfUri = buildCompleteDeliveryPdf(message);
 
-                for (int i = 0; i < selectedDocumentUris.size(); i++) {
-                    Uri preparedUri = copyUriToShareCache(selectedDocumentUris.get(i), "ELTA_documento_" + (i + 1) + ".pdf");
-                    if (preparedUri != null) shareUris.add(preparedUri);
-                }
+                if (finalPdfUri != null) {
+                    Intent shareIntent = new Intent(Intent.ACTION_SEND);
+                    shareIntent.setType("application/pdf");
+                    shareIntent.putExtra(Intent.EXTRA_STREAM, finalPdfUri);
+                    shareIntent.putExtra(Intent.EXTRA_TEXT, message);
+                    shareIntent.putExtra(Intent.EXTRA_SUBJECT, "ELTA - Registro de entrega");
+                    shareIntent.putExtra(Intent.EXTRA_TITLE, "ELTA - Registro de entrega");
+                    shareIntent.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION);
+                    shareIntent.setClipData(ClipData.newUri(getContentResolver(), "ELTA_Entrega_Completa.pdf", finalPdfUri));
 
-                if (shareUris.size() == 0) {
-                    openWhatsappText(cleanPhone, message);
+                    if (cleanPhone.length() > 0) {
+                        shareIntent.putExtra("jid", cleanPhone + "@s.whatsapp.net");
+                    }
+
+                    grantUriToCompatibleApps(shareIntent, finalPdfUri);
+
+                    if (isPackageInstalled("com.whatsapp")) {
+                        shareIntent.setPackage("com.whatsapp");
+                        startActivity(shareIntent);
+                        return;
+                    }
+
+                    if (isPackageInstalled("com.whatsapp.w4b")) {
+                        shareIntent.setPackage("com.whatsapp.w4b");
+                        startActivity(shareIntent);
+                        return;
+                    }
+
+                    shareIntent.setPackage(null);
+                    startActivity(Intent.createChooser(shareIntent, "Enviar registro completo"));
                     return;
                 }
-
-                Intent shareIntent = buildShareIntentWithDocuments(cleanPhone, message, shareUris);
-
-                if (isPackageInstalled("com.whatsapp")) {
-                    shareIntent.setPackage("com.whatsapp");
-                    startActivity(shareIntent);
-                    return;
-                }
-
-                if (isPackageInstalled("com.whatsapp.w4b")) {
-                    shareIntent.setPackage("com.whatsapp.w4b");
-                    startActivity(shareIntent);
-                    return;
-                }
-
-                shareIntent.setPackage(null);
-                startActivity(Intent.createChooser(shareIntent, "Enviar registro con documentos"));
-                return;
             }
 
             openWhatsappText(cleanPhone, message);
 
         } catch (Exception firstError) {
             try {
-                Intent fallback = new Intent(Intent.ACTION_SEND);
-                fallback.setType("text/plain");
-                fallback.putExtra(Intent.EXTRA_TEXT, message);
-                startActivity(Intent.createChooser(fallback, "Enviar registro"));
+                openWhatsappText(cleanPhone, message);
             } catch (Exception secondError) {
                 if (webView != null) {
-                    webView.evaluateJavascript(
-                        "alert('No se pudo abrir WhatsApp. El texto quedó copiado al portapapeles.');",
-                        null
-                    );
+                    webView.evaluateJavascript("alert('No se pudo abrir WhatsApp.');", null);
                 }
             }
         }
     }
 
-            private Intent buildShareIntentWithDocuments(String cleanPhone, String message, ArrayList<Uri> shareUris) {
-        Intent shareIntent;
-
-        if (shareUris.size() == 1) {
-            shareIntent = new Intent(Intent.ACTION_SEND);
-            shareIntent.putExtra(Intent.EXTRA_STREAM, shareUris.get(0));
-        } else {
-            shareIntent = new Intent(Intent.ACTION_SEND_MULTIPLE);
-            shareIntent.putParcelableArrayListExtra(Intent.EXTRA_STREAM, shareUris);
-        }
-
-        shareIntent.setType("application/pdf");
-
-        shareIntent.putExtra(Intent.EXTRA_TEXT, message);
-        shareIntent.putExtra(Intent.EXTRA_TITLE, message);
-        shareIntent.putExtra(Intent.EXTRA_SUBJECT, "ELTA - Registro de entrega");
-
-        if (cleanPhone != null && cleanPhone.length() > 0) {
-            shareIntent.putExtra("jid", cleanPhone + "@s.whatsapp.net");
-        }
-
-        shareIntent.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION);
-
-        ClipData clipData = null;
-        for (int i = 0; i < shareUris.size(); i++) {
-            Uri uri = shareUris.get(i);
-
-            if (i == 0) {
-                clipData = ClipData.newUri(getContentResolver(), "Documento PDF", uri);
-            } else if (clipData != null) {
-                clipData.addItem(new ClipData.Item(uri));
+    private void grantUriToCompatibleApps(Intent intent, Uri uri) {
+        try {
+            List<ResolveInfo> resInfoList = getPackageManager().queryIntentActivities(intent, PackageManager.MATCH_DEFAULT_ONLY);
+            for (ResolveInfo resolveInfo : resInfoList) {
+                grantUriPermission(resolveInfo.activityInfo.packageName, uri, Intent.FLAG_GRANT_READ_URI_PERMISSION);
             }
-        }
-
-        if (clipData != null) {
-            shareIntent.setClipData(clipData);
-        }
-
-        grantUrisToCompatibleApps(shareIntent, shareUris);
-
-        return shareIntent;
+        } catch (Exception ignored) {}
     }
 
     private boolean isPackageInstalled(String packageName) {
@@ -329,18 +399,6 @@ public class MainActivity extends Activity {
             ClipboardManager clipboard = (ClipboardManager) getSystemService(Context.CLIPBOARD_SERVICE);
             android.content.ClipData clip = android.content.ClipData.newPlainText("ELTA Registro", message);
             clipboard.setPrimaryClip(clip);
-        } catch (Exception ignored) {}
-    }
-
-    private void grantUrisToCompatibleApps(Intent intent, ArrayList<Uri> uris) {
-        try {
-            List<ResolveInfo> resInfoList = getPackageManager().queryIntentActivities(intent, PackageManager.MATCH_DEFAULT_ONLY);
-            for (ResolveInfo resolveInfo : resInfoList) {
-                String packageName = resolveInfo.activityInfo.packageName;
-                for (Uri uri : uris) {
-                    grantUriPermission(packageName, uri, Intent.FLAG_GRANT_READ_URI_PERMISSION);
-                }
-            }
         } catch (Exception ignored) {}
     }
 
@@ -374,13 +432,16 @@ public class MainActivity extends Activity {
                 }
                 notifyDocumentsSelected(names.toString());
             }
+
             uploadMessage = null;
         }
 
         if (requestCode == DOCUMENT_SCANNER_REQUEST_CODE) {
             selectedDocumentUris.clear();
+
             if (resultCode == Activity.RESULT_OK && data != null) {
                 GmsDocumentScanningResult result = GmsDocumentScanningResult.fromActivityResultIntent(data);
+
                 if (result != null && result.getPdf() != null && result.getPdf().getUri() != null) {
                     selectedDocumentUris.add(result.getPdf().getUri());
                     notifyDocumentsSelected("PDF escaneado");
