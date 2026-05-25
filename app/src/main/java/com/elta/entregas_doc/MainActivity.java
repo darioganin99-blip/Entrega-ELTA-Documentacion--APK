@@ -33,6 +33,9 @@ import com.google.mlkit.vision.documentscanner.GmsDocumentScanningResult;
 import java.io.File;
 import java.io.FileOutputStream;
 import java.io.InputStream;
+import java.io.OutputStreamWriter;
+import java.nio.charset.StandardCharsets;
+
 import java.util.ArrayList;
 import java.util.List;
 
@@ -208,6 +211,28 @@ public class MainActivity extends Activity {
         }
     }
 
+
+    private Uri createTextInfoFile(String message) {
+        try {
+            File dir = new File(getCacheDir(), "shared_docs");
+            if (!dir.exists()) dir.mkdirs();
+
+            File outFile = new File(dir, "ELTA_registro.txt");
+            OutputStreamWriter writer = new OutputStreamWriter(
+                new FileOutputStream(outFile),
+                StandardCharsets.UTF_8
+            );
+
+            writer.write(message == null ? "" : message);
+            writer.flush();
+            writer.close();
+
+            return FileProvider.getUriForFile(this, getPackageName() + ".fileprovider", outFile);
+        } catch (Exception e) {
+            return null;
+        }
+    }
+
     private void sendWhatsappNative(String phone, String message) {
         String cleanPhone = phone == null ? "" : phone.replace("+", "").replace(" ", "").replace("-", "").trim();
 
@@ -219,6 +244,14 @@ public class MainActivity extends Activity {
 
                 for (int i = 0; i < selectedDocumentUris.size(); i++) {
                     shareUris.add(copyUriToShareCache(selectedDocumentUris.get(i), "ELTA_documento_" + (i + 1) + ".pdf"));
+                }
+
+                // Archivo TXT con toda la información de entrega.
+                // WhatsApp a veces ignora EXTRA_TEXT cuando se envían documentos,
+                // por eso se adjunta este TXT junto al PDF para no perder datos.
+                Uri infoTxt = createTextInfoFile(message);
+                if (infoTxt != null) {
+                    shareUris.add(infoTxt);
                 }
 
                 Intent shareIntent = buildShareIntentWithDocuments(cleanPhone, message, shareUris);
@@ -270,9 +303,10 @@ public class MainActivity extends Activity {
             shareIntent.putParcelableArrayListExtra(Intent.EXTRA_STREAM, shareUris);
         }
 
-        shareIntent.setType("application/pdf");
+        shareIntent.setType("*/*");
         shareIntent.putExtra(Intent.EXTRA_TEXT, message);
         shareIntent.putExtra(Intent.EXTRA_SUBJECT, "ELTA - Registro de entrega");
+        shareIntent.putExtra(Intent.EXTRA_TITLE, "ELTA - Registro de entrega");
 
         if (cleanPhone != null && cleanPhone.length() > 0) {
             shareIntent.putExtra("jid", cleanPhone + "@s.whatsapp.net");
@@ -315,7 +349,6 @@ public class MainActivity extends Activity {
             clipboard.setPrimaryClip(clip);
         } catch (Exception ignored) {}
     }
-
 
     private void grantUrisToCompatibleApps(Intent intent, ArrayList<Uri> uris) {
         try {
