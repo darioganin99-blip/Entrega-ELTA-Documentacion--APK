@@ -385,7 +385,7 @@ function sendWhatsapp(){
     state={gps:null,destino:null,lote:"",vins:[],obs:"Sin observaciones",documento:null,documentos:[]};
     step=1;
     renderStep();
-  },5000);
+  },10000);
 }
 
 function resendLast(){

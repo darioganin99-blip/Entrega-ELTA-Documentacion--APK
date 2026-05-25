@@ -2,9 +2,11 @@ package com.elta.entregas_doc;
 
 import android.Manifest;
 import android.app.Activity;
+import android.content.ClipData;
 import android.content.Intent;
 import android.content.IntentSender;
 import android.content.pm.PackageManager;
+import android.content.pm.ResolveInfo;
 import android.net.Uri;
 import android.os.Build;
 import android.os.Bundle;
@@ -18,12 +20,18 @@ import android.webkit.WebSettings;
 import android.webkit.WebView;
 import android.webkit.WebViewClient;
 
+import androidx.core.content.FileProvider;
+
 import com.google.mlkit.vision.documentscanner.GmsDocumentScanner;
 import com.google.mlkit.vision.documentscanner.GmsDocumentScannerOptions;
 import com.google.mlkit.vision.documentscanner.GmsDocumentScanning;
 import com.google.mlkit.vision.documentscanner.GmsDocumentScanningResult;
 
+import java.io.File;
+import java.io.FileOutputStream;
+import java.io.InputStream;
 import java.util.ArrayList;
+import java.util.List;
 
 public class MainActivity extends Activity {
 
@@ -39,11 +47,9 @@ public class MainActivity extends Activity {
         super.onCreate(savedInstanceState);
 
         if (Build.VERSION.SDK_INT >= 23) {
-            if (
-                checkSelfPermission(Manifest.permission.CAMERA) != PackageManager.PERMISSION_GRANTED ||
+            if (checkSelfPermission(Manifest.permission.CAMERA) != PackageManager.PERMISSION_GRANTED ||
                 checkSelfPermission(Manifest.permission.ACCESS_FINE_LOCATION) != PackageManager.PERMISSION_GRANTED ||
-                checkSelfPermission(Manifest.permission.ACCESS_COARSE_LOCATION) != PackageManager.PERMISSION_GRANTED
-            ) {
+                checkSelfPermission(Manifest.permission.ACCESS_COARSE_LOCATION) != PackageManager.PERMISSION_GRANTED) {
                 requestPermissions(new String[] {
                     Manifest.permission.CAMERA,
                     Manifest.permission.ACCESS_FINE_LOCATION,
@@ -93,10 +99,7 @@ public class MainActivity extends Activity {
 
             @Override
             public boolean onShowFileChooser(WebView webView, ValueCallback<Uri[]> filePathCallback, FileChooserParams fileChooserParams) {
-                if (uploadMessage != null) {
-                    uploadMessage.onReceiveValue(null);
-                }
-
+                if (uploadMessage != null) uploadMessage.onReceiveValue(null);
                 uploadMessage = filePathCallback;
 
                 Intent contentIntent = new Intent(Intent.ACTION_OPEN_DOCUMENT);
@@ -123,7 +126,6 @@ public class MainActivity extends Activity {
 
     private boolean handleExternalUrl(String url) {
         if (url == null) return false;
-
         if (url.startsWith("https://wa.me/") || url.startsWith("http://wa.me/") || url.startsWith("whatsapp://")) {
             try {
                 Intent intent = new Intent(Intent.ACTION_VIEW, Uri.parse(url));
@@ -133,7 +135,6 @@ public class MainActivity extends Activity {
                 return false;
             }
         }
-
         return false;
     }
 
@@ -160,24 +161,15 @@ public class MainActivity extends Activity {
                     .build();
 
             GmsDocumentScanner scanner = GmsDocumentScanning.getClient(options);
-
             scanner.getStartScanIntent(this)
                 .addOnSuccessListener(intentSender -> {
                     try {
-                        startIntentSenderForResult(
-                            intentSender,
-                            DOCUMENT_SCANNER_REQUEST_CODE,
-                            null,
-                            0,
-                            0,
-                            0
-                        );
+                        startIntentSenderForResult(intentSender, DOCUMENT_SCANNER_REQUEST_CODE, null, 0, 0, 0);
                     } catch (IntentSender.SendIntentException e) {
                         showScannerError();
                     }
                 })
                 .addOnFailureListener(e -> showScannerError());
-
         } catch (Exception e) {
             showScannerError();
         }
@@ -185,64 +177,95 @@ public class MainActivity extends Activity {
 
     private void showScannerError() {
         if (webView != null) {
-            webView.evaluateJavascript(
-                "alert('No se pudo abrir el escáner PDF. Verificá Google Play Services.');",
-                null
-            );
+            webView.evaluateJavascript("alert('No se pudo abrir el escáner PDF. Verificá Google Play Services.');", null);
+        }
+    }
+
+    private Uri copyUriToShareCache(Uri sourceUri, String fileName) {
+        try {
+            File dir = new File(getCacheDir(), "shared_docs");
+            if (!dir.exists()) dir.mkdirs();
+
+            File outFile = new File(dir, fileName);
+            InputStream in = getContentResolver().openInputStream(sourceUri);
+            FileOutputStream out = new FileOutputStream(outFile);
+
+            byte[] buffer = new byte[8192];
+            int len;
+            while (in != null && (len = in.read(buffer)) > 0) {
+                out.write(buffer, 0, len);
+            }
+
+            if (in != null) in.close();
+            out.close();
+
+            return FileProvider.getUriForFile(this, getPackageName() + ".fileprovider", outFile);
+        } catch (Exception e) {
+            return sourceUri;
         }
     }
 
     private void sendWhatsappNative(String phone, String message) {
-        String cleanPhone =
-            phone == null
-                ? ""
-                : phone.replace("+", "").replace(" ", "").replace("-", "").trim();
+        String cleanPhone = phone == null ? "" : phone.replace("+", "").replace(" ", "").replace("-", "").trim();
 
         try {
             if (selectedDocumentUris != null && selectedDocumentUris.size() > 0) {
-                Intent shareIntent = new Intent(Intent.ACTION_SEND_MULTIPLE);
-                shareIntent.setType("*/*");
+                ArrayList<Uri> shareUris = new ArrayList<>();
+                for (int i = 0; i < selectedDocumentUris.size(); i++) {
+                    shareUris.add(copyUriToShareCache(selectedDocumentUris.get(i), "ELTA_documento_" + (i + 1) + ".pdf"));
+                }
 
+                Intent shareIntent;
+                if (shareUris.size() == 1) {
+                    shareIntent = new Intent(Intent.ACTION_SEND);
+                    shareIntent.putExtra(Intent.EXTRA_STREAM, shareUris.get(0));
+                } else {
+                    shareIntent = new Intent(Intent.ACTION_SEND_MULTIPLE);
+                    shareIntent.putParcelableArrayListExtra(Intent.EXTRA_STREAM, shareUris);
+                }
+
+                shareIntent.setType("application/pdf");
                 shareIntent.putExtra(Intent.EXTRA_TEXT, message);
-                shareIntent.putParcelableArrayListExtra(Intent.EXTRA_STREAM, selectedDocumentUris);
-
-                shareIntent.setClipData(
-                    android.content.ClipData.newUri(
-                        getContentResolver(),
-                        "Documento",
-                        selectedDocumentUris.get(0)
-                    )
-                );
-
                 shareIntent.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION);
-                shareIntent.addFlags(Intent.FLAG_GRANT_WRITE_URI_PERMISSION);
 
-                Intent chooser = Intent.createChooser(shareIntent, "Enviar registro con PDF");
-                startActivity(chooser);
+                ClipData clipData = null;
+                for (int i = 0; i < shareUris.size(); i++) {
+                    Uri uri = shareUris.get(i);
+                    if (i == 0) {
+                        clipData = ClipData.newUri(getContentResolver(), "Documento", uri);
+                    } else if (clipData != null) {
+                        clipData.addItem(new ClipData.Item(uri));
+                    }
+                }
+                if (clipData != null) shareIntent.setClipData(clipData);
+
+                grantUrisToCompatibleApps(shareIntent, shareUris);
+                startActivity(Intent.createChooser(shareIntent, "Enviar registro con documentos"));
                 return;
             }
 
             openWhatsappText(cleanPhone, message);
-
         } catch (Exception firstError) {
             try {
                 openWhatsappText(cleanPhone, message);
             } catch (Exception secondError) {
-                try {
-                    Intent textIntent = new Intent(Intent.ACTION_SEND);
-                    textIntent.setType("text/plain");
-                    textIntent.putExtra(Intent.EXTRA_TEXT, message);
-                    startActivity(Intent.createChooser(textIntent, "Enviar registro"));
-                } catch (Exception finalError) {
-                    if (webView != null) {
-                        webView.evaluateJavascript(
-                            "alert('No se pudo abrir WhatsApp');",
-                            null
-                        );
-                    }
+                if (webView != null) {
+                    webView.evaluateJavascript("alert('No se pudieron enviar los documentos por WhatsApp');", null);
                 }
             }
         }
+    }
+
+    private void grantUrisToCompatibleApps(Intent intent, ArrayList<Uri> uris) {
+        try {
+            List<ResolveInfo> resInfoList = getPackageManager().queryIntentActivities(intent, PackageManager.MATCH_DEFAULT_ONLY);
+            for (ResolveInfo resolveInfo : resInfoList) {
+                String packageName = resolveInfo.activityInfo.packageName;
+                for (Uri uri : uris) {
+                    grantUriPermission(packageName, uri, Intent.FLAG_GRANT_READ_URI_PERMISSION);
+                }
+            }
+        } catch (Exception ignored) {}
     }
 
     private void openWhatsappText(String cleanPhone, String message) {
@@ -264,62 +287,60 @@ public class MainActivity extends Activity {
         if (requestCode == FILE_CHOOSER_REQUEST_CODE && uploadMessage != null) {
             Uri[] results = extractUris(resultCode, data);
             uploadMessage.onReceiveValue(results);
+
+            selectedDocumentUris.clear();
+            if (results != null && results.length > 0) {
+                StringBuilder names = new StringBuilder();
+                for (int i = 0; i < results.length; i++) {
+                    selectedDocumentUris.add(results[i]);
+                    if (i > 0) names.append(",");
+                    names.append("Documento ").append(i + 1);
+                }
+                notifyDocumentsSelected(names.toString());
+            }
             uploadMessage = null;
         }
 
         if (requestCode == DOCUMENT_SCANNER_REQUEST_CODE) {
             selectedDocumentUris.clear();
-
             if (resultCode == Activity.RESULT_OK && data != null) {
-                GmsDocumentScanningResult result =
-                    GmsDocumentScanningResult.fromActivityResultIntent(data);
-
+                GmsDocumentScanningResult result = GmsDocumentScanningResult.fromActivityResultIntent(data);
                 if (result != null && result.getPdf() != null && result.getPdf().getUri() != null) {
                     selectedDocumentUris.add(result.getPdf().getUri());
-
-                    if (webView != null) {
-                        webView.evaluateJavascript(
-                            "if(window.onNativeDocumentSelected) window.onNativeDocumentSelected('PDF escaneado');",
-                            null
-                        );
-                    }
+                    notifyDocumentsSelected("PDF escaneado");
                 }
             }
         }
     }
 
+    private void notifyDocumentsSelected(String names) {
+        if (webView != null) {
+            String safe = names == null ? "" : names.replace("'", "\\'");
+            webView.evaluateJavascript("if(window.onNativeDocumentSelected) window.onNativeDocumentSelected('" + safe + "');", null);
+        }
+    }
+
     private Uri[] extractUris(int resultCode, Intent data) {
         Uri[] results = null;
-
         if (resultCode == Activity.RESULT_OK && data != null) {
             if (data.getClipData() != null) {
                 int count = data.getClipData().getItemCount();
                 results = new Uri[count];
-
                 for (int i = 0; i < count; i++) {
                     Uri uri = data.getClipData().getItemAt(i).getUri();
                     results[i] = uri;
-
                     try {
-                        getContentResolver().takePersistableUriPermission(
-                            uri,
-                            Intent.FLAG_GRANT_READ_URI_PERMISSION
-                        );
+                        getContentResolver().takePersistableUriPermission(uri, Intent.FLAG_GRANT_READ_URI_PERMISSION);
                     } catch (Exception ignored) {}
                 }
             } else if (data.getData() != null) {
                 Uri uri = data.getData();
                 results = new Uri[]{uri};
-
                 try {
-                    getContentResolver().takePersistableUriPermission(
-                        uri,
-                        Intent.FLAG_GRANT_READ_URI_PERMISSION
-                    );
+                    getContentResolver().takePersistableUriPermission(uri, Intent.FLAG_GRANT_READ_URI_PERMISSION);
                 } catch (Exception ignored) {}
             }
         }
-
         return results;
     }
 }
