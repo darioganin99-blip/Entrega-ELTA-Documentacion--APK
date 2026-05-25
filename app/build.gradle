@@ -11,8 +11,8 @@ android {
         applicationId "com.elta.entregas_doc"
         minSdk 24
         targetSdk 34
-        versionCode 483
-        versionName "4.8.3"
+        versionCode 484
+        versionName "4.8.4"
     }
 }
 

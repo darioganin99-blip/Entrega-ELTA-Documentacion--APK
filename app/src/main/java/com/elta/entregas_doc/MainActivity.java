@@ -272,7 +272,7 @@ public class MainActivity extends Activity {
         }
     }
 
-        private Intent buildShareIntentWithDocuments(String cleanPhone, String message, ArrayList<Uri> shareUris) {
+            private Intent buildShareIntentWithDocuments(String cleanPhone, String message, ArrayList<Uri> shareUris) {
         Intent shareIntent;
 
         if (shareUris.size() == 1) {
@@ -284,9 +284,10 @@ public class MainActivity extends Activity {
         }
 
         shareIntent.setType("application/pdf");
+
         shareIntent.putExtra(Intent.EXTRA_TEXT, message);
+        shareIntent.putExtra(Intent.EXTRA_TITLE, message);
         shareIntent.putExtra(Intent.EXTRA_SUBJECT, "ELTA - Registro de entrega");
-        shareIntent.putExtra(Intent.EXTRA_TITLE, "ELTA - Registro de entrega");
 
         if (cleanPhone != null && cleanPhone.length() > 0) {
             shareIntent.putExtra("jid", cleanPhone + "@s.whatsapp.net");
@@ -297,6 +298,7 @@ public class MainActivity extends Activity {
         ClipData clipData = null;
         for (int i = 0; i < shareUris.size(); i++) {
             Uri uri = shareUris.get(i);
+
             if (i == 0) {
                 clipData = ClipData.newUri(getContentResolver(), "Documento PDF", uri);
             } else if (clipData != null) {
