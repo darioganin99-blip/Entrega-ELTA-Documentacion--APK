@@ -1,0 +1,1 @@
+Version 4.4\n- WhatsApp abre fuera del WebView.\n- Boton nativo para escanear/seleccionar documentos PDF.\n
